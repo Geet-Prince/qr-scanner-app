@@ -5,26 +5,54 @@ import pandas as pd
 import cv2
 import numpy as np
 from pyzbar.pyzbar import decode
-from io import BytesIO
+import os
+import ctypes
 
-# ----------------- GOOGLE SHEETS SETUP -----------------
+
+# ----------------- GOOGLE SHEETS SETUP (USING SECRETS) -----------------
 SCOPE = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-CREDS = Credentials.from_service_account_file("your-service-account.json", scopes=SCOPE)
-client = gspread.authorize(CREDS)
 
-SHEET_ID = "1I8z27cmHXUB48B6J52_p56elELf2tQVv_K-ra6jf1iQ"  # Replace with actual Google Sheet ID
-SHEET_NAME = "Attendees"
-sheet = client.open_by_key(SHEET_ID).worksheet(SHEET_NAME)
+try:
+    creds_json = st.secrets["google_credentials"]  # Use the secret name
+    CREDS = Credentials.from_service_account_info(creds_json, scopes=SCOPE)
+    client = gspread.authorize(CREDS)
+
+    SHEET_ID = "1I8z27cmHXUB48B6J52_p56elELf2tQVv_K-ra6jf1iQ"  # Replace with actual Google Sheet ID
+    SHEET_NAME = "Attendees"
+    try:
+        sheet = client.open_by_key(SHEET_ID).worksheet(SHEET_NAME)
+    except gspread.exceptions.SpreadsheetNotFound:
+        st.error("Spreadsheet not found. Check your SHEET_ID.")
+        st.stop()  # Stop execution
+    except gspread.exceptions.WorksheetNotFound:
+        st.error("Worksheet not found. Check your SHEET_NAME.")
+        st.stop()
+
+except KeyError:
+    st.error("Google credentials secret 'google_credentials' not found. Please set up the secret in Streamlit Cloud.")
+    st.stop()
+except Exception as e:
+    st.error(f"Error loading credentials: {e}")
+    st.stop()
+
+# ----------------- Load libzbar (CRUCIAL FIX) -----------------
+try:
+    libzbar_path = "/usr/local/lib/libzbar.so.0"  # Path inside the Docker container
+    libzbar = ctypes.CDLL(libzbar_path)
+except OSError as e:
+    st.error(f"Error loading libzbar: {e}")
+    st.stop()  # Stop execution if libzbar cannot be loaded
+
+# ----------------- IMPORT DECODE AFTER LOADING LIBZBAR -----------------
+from pyzbar.pyzbar import decode
 
 # ----------------- STREAMLIT UI -----------------
 st.title("📸 QR Code Scanner & Verification")
 
-# Option to upload an image or use webcam
 scan_option = st.radio("Select Scan Mode:", ["📂 Upload QR Image", "🎥 Use Webcam"])
 
 # ----------------- FUNCTION TO READ QR CODE -----------------
 def read_qr_from_image(image):
-    """Reads QR code from an uploaded image."""
     np_image = np.array(bytearray(image.read()), dtype=np.uint8)
     img = cv2.imdecode(np_image, cv2.IMREAD_COLOR)
     qr_codes = decode(img)
@@ -34,7 +62,6 @@ def read_qr_from_image(image):
     return None
 
 def read_qr_from_webcam():
-    """Reads QR code from webcam."""
     cap = cv2.VideoCapture(0)
 
     st.write("**Press 'Q' to Exit the Scanner**")
@@ -62,17 +89,14 @@ def read_qr_from_webcam():
 
 # ----------------- VERIFY USER IN GOOGLE SHEET -----------------
 def verify_user(qr_data):
-    """Checks if scanned QR ID exists in Google Sheet."""
     data = sheet.get_all_records()
     df = pd.DataFrame(data)
 
-    # Extract ID from QR
     qr_lines = qr_data.split("\n")
     for line in qr_lines:
         if line.startswith("ID: "):
             qr_id = line.replace("ID: ", "").strip()
 
-            # Check if ID exists in the sheet
             user_row = df[df["ID"] == qr_id]
 
             if not user_row.empty:
@@ -83,10 +107,13 @@ def verify_user(qr_data):
                 if verified_status == "✅":
                     return f"⚠ Duplicate Entry: {user_name} has already been verified!"
                 else:
-                    # Mark as Verified
                     cell = sheet.find(qr_id)
-                    sheet.update_cell(cell.row, 4, "✅")  # Update "Verified" column
-                    return f"✅ User Verified: {user_name} (Mobile: {user_mobile})"
+                    if cell:  # Check if the cell was found
+                        sheet.update_cell(cell.row, 4, "✅")
+                        return f"✅ User Verified: {user_name} (Mobile: {user_mobile})"
+                    else:
+                        return "❌ Error: ID not found in sheet (after initial verification)." # Handle potential error.
+
             else:
                 return "❌ No user found in the database."
 
