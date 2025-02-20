@@ -10,6 +10,8 @@ gitdb==4.0.12
 GitPython==3.1.44
 google-auth==2.38.0
 google-auth-oauthlib==1.2.1
+google-auth-httplib2==0.2.0
+httplib2==0.22.0
 gspread==6.1.4
 idna==3.10
 Jinja2==3.1.5
@@ -21,7 +23,7 @@ mdurl==0.1.2
 narwhals==1.27.1
 numpy==2.2.3
 oauthlib==3.2.2
-opencv-python-headless==4.11.0.86
+opencv-python==4.11.0.86
 packaging==24.2
 pandas==2.2.3
 pillow==11.1.0
@@ -50,4 +52,3 @@ typing_extensions==4.12.2
 tzdata==2025.1
 urllib3==2.3.0
 watchdog==6.0.0
-pyzbar==0.1.9
