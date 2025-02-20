@@ -92,11 +92,10 @@ class QRScanner(VideoTransformerBase):
         qr_codes = decode(img)
 
         for qr in qr_codes:
-            qr_data = qr.data.decode("utf-8")
-            self.qr_data = qr_data
+            self.qr_data = qr.data.decode("utf-8")  # Store the detected QR code
             pts = np.array(qr.polygon, np.int32).reshape((-1, 1, 2))
             cv2.polylines(img, [pts], True, (0, 255, 0), 3)
-            cv2.putText(img, qr_data, (qr.rect.left, qr.rect.top - 10),
+            cv2.putText(img, self.qr_data, (qr.rect.left, qr.rect.top - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
         return av.VideoFrame.from_ndarray(img, format="bgr24")
@@ -130,12 +129,18 @@ elif scan_option == "📷 Use Camera (Live Scan)":
     ctx = webrtc_streamer(
         key="qr-scanner",
         video_transformer_factory=QRScanner,
-        rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
+        rtc_configuration={
+            "iceServers": [
+                {"urls": ["stun:stun.l.google.com:19302"]},
+                {"urls": "turn:openrelay.metered.ca:80", "username": "openrelayproject", "credential": "openrelayproject"}
+            ]
+        },
         media_stream_constraints={"video": {"facingMode": "user" if camera_option == "🤳 Front Camera" else "environment"}}
     )
 
-    if ctx.video_transformer:
-        if ctx.video_transformer.qr_data:
-            st.success(f"🔍 QR Code Scanned: {ctx.video_transformer.qr_data}")
-            verification_result = verify_user(ctx.video_transformer.qr_data)
-            st.write(verification_result)
+    if ctx.video_transformer and ctx.video_transformer.qr_data:
+        qr_result = ctx.video_transformer.qr_data
+        st.success(f"🔍 QR Code Scanned: {qr_result}")
+        verification_result = verify_user(qr_result)
+        st.write(verification_result)
+        ctx.video_transformer.qr_data = None  # Reset after scanning
