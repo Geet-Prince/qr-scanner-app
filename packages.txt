@@ -1,1 +1,6 @@
 libzbar0
+ffmpeg
+libsm6
+libxext6
+libgl1-mesa-glx
+libzbar0
