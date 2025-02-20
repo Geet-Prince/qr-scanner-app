@@ -8,7 +8,7 @@ import ctypes
 import os
 from pyzbar.pyzbar import decode
 
-# ----------------- GOOGLE SHEETS SETUP (USING SECRETS) -----------------
+# ----------------- GOOGLE SHEETS SETUP -----------------
 SCOPE = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 
 try:
@@ -49,7 +49,7 @@ for path in LIBZBAR_LOCATIONS:
             libzbar = ctypes.CDLL(path)
             st.success(f"✅ Successfully loaded libzbar from: {path}")
             break
-        except OSError as e:
+        except OSError:
             continue
 
 if not libzbar:
@@ -59,7 +59,7 @@ if not libzbar:
 # ----------------- STREAMLIT UI -----------------
 st.title("📸 QR Code Scanner & Verification")
 
-scan_option = st.radio("Select Scan Mode:", ["📂 Upload QR Image"])
+scan_option = st.radio("Select Scan Mode:", ["📂 Upload QR Image", "📷 Live Camera"])
 
 # ----------------- FUNCTION TO READ QR CODE -----------------
 def read_qr_from_image(image):
@@ -106,7 +106,7 @@ def verify_user(qr_data):
 
     return "❌ Invalid QR Code Format."
 
-# ----------------- HANDLE SCAN MODES -----------------
+# ----------------- HANDLE UPLOADED IMAGE -----------------
 if scan_option == "📂 Upload QR Image":
     uploaded_file = st.file_uploader("Upload a QR Code Image", type=["png", "jpg", "jpeg"])
     if uploaded_file:
@@ -119,3 +119,39 @@ if scan_option == "📂 Upload QR Image":
             st.write(verification_result)
         else:
             st.error("❌ No QR Code detected in the image.")
+
+# ----------------- LIVE CAMERA QR SCANNING -----------------
+elif scan_option == "📷 Live Camera":
+    st.warning("⚠ Make sure your camera is accessible.")
+
+    cap = cv2.VideoCapture(0)  # Open webcam
+    frame_placeholder = st.empty()
+
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            st.error("❌ Unable to access camera.")
+            break
+
+        qr_codes = decode(frame)
+        for qr_code in qr_codes:
+            qr_data = qr_code.data.decode("utf-8")
+            st.success(f"🔍 QR Code Scanned: {qr_data}")
+            verification_result = verify_user(qr_data)
+            st.write(verification_result)
+
+            # Draw rectangle around QR code
+            (x, y, w, h) = qr_code.rect
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+
+            # Stop capturing once QR is found
+            cap.release()
+            cv2.destroyAllWindows()
+            break
+
+        # Convert frame to RGB and display in Streamlit
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        frame_placeholder.image(frame, channels="RGB")
+
+    cap.release()
+    cv2.destroyAllWindows()
