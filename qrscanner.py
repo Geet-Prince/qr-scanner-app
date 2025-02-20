@@ -5,18 +5,16 @@ import pandas as pd
 import cv2
 import numpy as np
 from pyzbar.pyzbar import decode
-from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
-import av
 
 # ----------------- GOOGLE SHEETS SETUP -----------------
 SCOPE = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 
 try:
-    creds_json = st.secrets["google_credentials"]  # Load credentials from Streamlit secrets
+    creds_json = st.secrets["google_credentials"]
     creds = Credentials.from_service_account_info(creds_json, scopes=SCOPE)
     client = gspread.authorize(creds)
 
-    SHEET_ID = "1I8z27cmHXUB48B6J52_p56elELf2tQVv_K-ra6jf1iQ"  # Replace with your Google Sheet ID
+    SHEET_ID = "1I8z27cmHXUB48B6J52_p56elELf2tQVv_K-ra6jf1iQ"
     SHEET_NAME = "Attendees"
 
     try:
@@ -29,7 +27,7 @@ try:
         st.stop()
 
 except KeyError:
-    st.error("Google credentials secret 'google_credentials' not found. Please set up the secret in Streamlit Cloud.")
+    st.error("Google credentials not found in Streamlit secrets.")
     st.stop()
 except Exception as e:
     st.error(f"Error loading credentials: {e}")
@@ -82,24 +80,6 @@ def verify_user(qr_data):
 
     return "❌ Invalid QR Code Format."
 
-# ----------------- CAMERA STREAM (WITH FRONT/BACK SWITCH) -----------------
-class QRScanner(VideoTransformerBase):
-    def __init__(self):
-        self.qr_data = None
-
-    def transform(self, frame):
-        img = frame.to_ndarray(format="bgr24")
-        qr_codes = decode(img)
-
-        for qr in qr_codes:
-            self.qr_data = qr.data.decode("utf-8")  # Store the detected QR code
-            pts = np.array(qr.polygon, np.int32).reshape((-1, 1, 2))
-            cv2.polylines(img, [pts], True, (0, 255, 0), 3)
-            cv2.putText(img, self.qr_data, (qr.rect.left, qr.rect.top - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-
-        return av.VideoFrame.from_ndarray(img, format="bgr24")
-
 # ----------------- HANDLE SCAN MODES -----------------
 if scan_option == "📂 Upload QR Image":
     uploaded_file = st.file_uploader("Upload a QR Code Image", type=["png", "jpg", "jpeg"])
@@ -115,32 +95,17 @@ if scan_option == "📂 Upload QR Image":
             st.error("❌ No QR Code detected in the image.")
 
 elif scan_option == "📷 Use Camera (Live Scan)":
-    st.write("**Click the Camera Button to Start Scanning**")
+    st.write("**Click the button below to capture a QR Code from your camera.**")
 
-    # Option to choose camera (Front or Back)
-    camera_option = st.radio("Choose Camera:", ["📹 Back Camera", "🤳 Front Camera"])
-    
-    if camera_option == "📹 Back Camera":
-        video_source = 0  # Default back camera
-    else:
-        video_source = 1  # Attempt to switch to front camera
+    # Capture image from webcam
+    img_file_buffer = st.camera_input("Take a picture")
 
-    # Start the webcam
-    ctx = webrtc_streamer(
-        key="qr-scanner",
-        video_transformer_factory=QRScanner,
-        rtc_configuration={
-            "iceServers": [
-                {"urls": ["stun:stun.l.google.com:19302"]},
-                {"urls": "turn:openrelay.metered.ca:80", "username": "openrelayproject", "credential": "openrelayproject"}
-            ]
-        },
-        media_stream_constraints={"video": {"facingMode": "user" if camera_option == "🤳 Front Camera" else "environment"}}
-    )
+    if img_file_buffer:
+        qr_result = read_qr_from_image(img_file_buffer)
 
-    if ctx.video_transformer and ctx.video_transformer.qr_data:
-        qr_result = ctx.video_transformer.qr_data
-        st.success(f"🔍 QR Code Scanned: {qr_result}")
-        verification_result = verify_user(qr_result)
-        st.write(verification_result)
-        ctx.video_transformer.qr_data = None  # Reset after scanning
+        if qr_result:
+            st.success(f"🔍 QR Code Scanned: {qr_result}")
+            verification_result = verify_user(qr_result)
+            st.write(verification_result)
+        else:
+            st.error("❌ No QR Code detected in the image.")
