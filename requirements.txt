@@ -6,3 +6,4 @@ numpy
 pandas
 google-auth
 gspread
+oauth2client==4.1.3
