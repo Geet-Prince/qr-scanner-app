@@ -1,11 +1,11 @@
-FROM python:3.11-slim-buster
+# Stage 1: Build zbar from source
 
-WORKDIR /app
+FROM ubuntu:22.04 AS builder
 
-# Install system dependencies (including build tools)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libzbar0 \
-    zbar-tools \
+WORKDIR /tmp
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
     build-essential \
     cmake \
     git \
@@ -13,29 +13,34 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libtool \
     autoconf \
     libzbar-dev \
-    libzbar-dev:i386
+    libzbar0 # Install libzbar for linking
 
-# Install Rust (required for some pyzbar builds)
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-ENV PATH="/root/.cargo/bin:$PATH"
+# Download and build zbar
+RUN git clone https://github.com/zbar/zbar.git
+WORKDIR /tmp/zbar
+RUN ./autogen.sh && ./configure --prefix=/usr/local --enable-video --without-qt && make -j$(nproc) && make install
 
-# Install system dependencies for deployment (CRUCIAL!)
-RUN apt-get update && apt-get install -y --no-install-recommends libzbar0 zbar-tools
+# Stage 2: Final Streamlit image
 
-# Build pyzbar from source
-RUN git clone https://github.com/NaturalHistoryMuseum/pyzbar.git
-WORKDIR /app/pyzbar
-RUN python setup.py bdist_wheel
+FROM python:3.11-slim-buster
 
-# Install the wheel
-RUN pip install --no-cache-dir dist/*.whl
+WORKDIR /app
+
+# Copy built zbar library
+COPY --from=builder /usr/local/lib/libzbar.so.0 /usr/local/lib/
+COPY --from=builder /usr/local/include/zbar.h /usr/local/include/
+
+# Set up the environment to find the library
+ENV LD_LIBRARY_PATH /usr/local/lib:$LD_LIBRARY_PATH
+
+# Copy built zbar tools (if needed by pyzbar)
+COPY --from=builder /usr/local/bin/zbar-config /usr/local/bin/
+COPY --from=builder /usr/local/bin/zbarimg /usr/local/bin/
+COPY --from=builder /usr/local/bin/zbarcam /usr/local/bin/
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
-
-# Set LD_LIBRARY_PATH (Crucial for linking)
-ENV LD_LIBRARY_PATH /usr/local/lib:$LD_LIBRARY_PATH
 
 CMD ["streamlit", "run", "qr_scanner.py"]
