@@ -1,4 +1,4 @@
-libzbar.so.0
+
 libzbar0
 libzbar-dev
 ffmpeg
