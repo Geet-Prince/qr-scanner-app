@@ -6,7 +6,6 @@ import cv2
 import numpy as np
 from pyzbar.pyzbar import decode
 
-# ----------------- GOOGLE SHEETS SETUP -----------------
 SCOPE = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 
 try:
@@ -33,12 +32,10 @@ except Exception as e:
     st.error(f"Error loading credentials: {e}")
     st.stop()
 
-# ----------------- STREAMLIT UI -----------------
 st.title("📸 QR Code Scanner & Verification")
 
 scan_option = st.radio("Select Scan Mode:", ["📂 Upload QR Image", "📷 Use Camera (Live Scan)"])
 
-# ----------------- FUNCTION TO READ QR CODE -----------------
 def read_qr_from_image(image):
     np_image = np.array(bytearray(image.read()), dtype=np.uint8)
     img = cv2.imdecode(np_image, cv2.IMREAD_COLOR)
@@ -48,7 +45,6 @@ def read_qr_from_image(image):
         return qr_codes[0].data.decode("utf-8")
     return None
 
-# ----------------- VERIFY USER IN GOOGLE SHEET -----------------
 def verify_user(qr_data):
     data = sheet.get_all_records()
     df = pd.DataFrame(data)
@@ -80,7 +76,6 @@ def verify_user(qr_data):
 
     return "❌ Invalid QR Code Format."
 
-# ----------------- HANDLE SCAN MODES -----------------
 if scan_option == "📂 Upload QR Image":
     uploaded_file = st.file_uploader("Upload a QR Code Image", type=["png", "jpg", "jpeg"])
     if uploaded_file:
