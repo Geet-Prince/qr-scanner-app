@@ -32,7 +32,7 @@ except Exception as e:
     st.error(f"Error loading credentials: {e}")
     st.stop()
 
-st.title("📸 QR Code Scanner & Verification")
+st.title("📸 Meloraga Verification")
 
 scan_option = st.radio("Select Scan Mode:", ["📂 Upload QR Image", "📷 Use Camera (Live Scan)"])
 
