@@ -66,7 +66,7 @@ def verify_user(qr_data):
                 else:
                     cell = sheet.find(qr_id)
                     if cell:
-                        sheet.update_cell(cell.row, 4, "✅")
+                        sheet.update_cell(cell.row, 5, "✅")
                         return f"✅ User Verified: {user_name} (Mobile: {user_mobile})"
                     else:
                         return "❌ Error: ID not found in sheet (after initial verification)."
